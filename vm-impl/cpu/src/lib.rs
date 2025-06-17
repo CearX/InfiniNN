@@ -111,3 +111,6 @@ impl vm::CommGroup for CommGroup {
 
 #[cfg(test)]
 mod test_llama;
+
+#[cfg(test)]
+mod test_qw2vl;

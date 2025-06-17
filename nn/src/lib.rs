@@ -5,11 +5,13 @@ use std::{borrow::Cow, ops::Deref};
 use vm::{Id, VirtualMachine};
 
 pub mod attention;
+pub mod conv;
 pub mod linear;
 pub mod linear_residual;
 pub mod lm_output;
 pub mod mlp;
 pub mod normalization;
+pub mod qw2vl;
 pub mod self_attn;
 pub mod token_embed;
 pub mod transformer;
