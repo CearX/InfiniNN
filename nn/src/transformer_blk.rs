@@ -64,6 +64,20 @@ impl TransformerBlk {
         llama
     }
 
+    pub fn qw2vl_vit(
+        dt_norm: DigitLayout,
+        dt_w: DigitLayout,
+        nh: usize,
+        nkvh: usize,
+        dh: usize,
+        di: usize,
+    ) -> Self {
+        let mut gpt2 = Self::gpt2(dt_norm, dt_w, nh, nkvh, dh, di);
+        gpt2.self_attn.use_rope = true;
+        gpt2.self_attn.mask = AttnMask::None;
+        gpt2
+    }
+
     pub fn gpt2(
         dt_norm: DigitLayout,
         dt_w: DigitLayout,

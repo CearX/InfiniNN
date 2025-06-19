@@ -1,4 +1,5 @@
 mod add;
+mod conv;
 mod gelu;
 mod layer_norm;
 mod mat_mul;
@@ -10,6 +11,7 @@ mod swiglu;
 mod token_embed;
 
 pub use add::Add;
+pub use conv::Conv;
 pub use gelu::GeLU;
 pub use layer_norm::LayerNorm;
 pub use mat_mul::MatMul;

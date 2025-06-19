@@ -1,22 +1,18 @@
 use crate::CpuVM;
 use core::slice;
 use digit_layout::types;
-use ggus::{GGmlTokenType, GGuf, GGufMetaMapExt, ggml_quants::f16};
+use ggus::{GGuf, GGufMetaMapExt, ggml_quants::f16};
 use memmap2::Mmap;
 use nn::{
-    VirtualMachineExt, WeightBiasData, conv,
-    lm_output::{self, LmOutput},
-    mlp,
+    VirtualMachineExt, WeightBiasData, mlp,
     normalization::{Normalization, Type},
     qw2vl::merger::{self, Merger},
-    qw2vl::patch_embd::{self, Patchembd},
+    qw2vl::patch_embd::{self, PatchEmbd},
     self_attn,
-    token_embed::{self, TokenEmbed},
     transformer::{self, Repeat, Transformer},
     transformer_blk::{self, TransformerBlk},
 };
-use std::{env::var_os, fs::File, io::Write, ops::Deref, slice::from_raw_parts, sync::Arc};
-use tokeneer::{Bpe, Tokeneer};
+use std::{env::var_os, fs::File, ops::Deref, slice::from_raw_parts, sync::Arc};
 use vm::{VirtualMachine, op::RotaryType};
 
 #[test]
@@ -30,6 +26,8 @@ fn test() {
 
     assert_eq!(gguf.general_architecture().unwrap(), "clip.vision");
 
+    let vm = CpuVM::default();
+
     // image preprocess
     // todo
     // ✔️  clip.vision.patch_size····················u32: 14
@@ -37,24 +35,28 @@ fn test() {
     // ✔️  clip.vision.projection_dim················u32: 1536
     // ✔️  clip.vision.image_mean····················arr: [0.48145467, 0.4578275, 0.40821072]
     // ✔️  clip.vision.image_std·····················arr: [0.26862955, 0.2613026, 0.2757771]
-    let image = vec![1.0; 3 * 336 * 476];
-
-    let vm = CpuVM::default();
+    let d_patch = 14;
+    let d_proj = 1536;
+    let _image_mean = [0.48145467, 0.4578275, 0.40821072];
+    let _image_std = [0.26862955, 0.2613026, 0.2757771];
+    let image = vm.workspace(types::F16, &[1, 3, 336, 476]);
+    let &[_, _, h, w] = image.shape() else {
+        panic!()
+    };
+    let h_patches = h / d_patch;
+    let w_patches = w / d_patch;
+    let patches = h_patches * w_patches;
 
     // patch_embd
 
     let patch_embd = vm.register("patch_embd");
     let data = patch_embd::Data {
-        patch_embd: conv::Data {
-            conv: Data::mmap(&file, &gguf, &format!("v.patch_embd.weight")).as_weight(),
-        },
-        patch_embd1: conv::Data {
-            conv: Data::mmap(&file, &gguf, &format!("v.patch_embd.weight.1")).as_weight(),
-        },
+        patch_embd: Data::mmap(&file, &gguf, &format!("v.patch_embd.weight")).as_weight(),
+        patch_embd1: Data::mmap(&file, &gguf, &format!("v.patch_embd.weight.1")).as_weight(),
     };
-    // vm.init::<Patchembd>(patch_embd, 0, data);
+    vm.init::<PatchEmbd>(patch_embd, 0, data);
 
-    // qw2vl vit
+    // qw2vl_vit
 
     let qw2vl_vit = vm.register("qw2vl-vit");
 
@@ -62,7 +64,7 @@ fn test() {
     let nh = gguf.llm_attention_head_count().unwrap();
     let d = gguf.llm_embedding_length().unwrap();
     let di = gguf.llm_feed_forward_length().unwrap();
-    let epsilon = gguf.llm_attention_layer_norm_epsilon().unwrap();
+    let _epsilon = gguf.llm_attention_layer_norm_epsilon().unwrap();
 
     // let nctx = gguf.llm_context_length().unwrap();
     // let theta = gguf.llm_rope_freq_base().unwrap();
@@ -142,10 +144,64 @@ fn test() {
             },
         },
     };
-    // vm.init::<Merger>(merger, 0, data);
+    vm.init::<Merger>(merger, 0, data);
 
     // forward
-    // todo
+
+    let dt_w = types::F16;
+    let dt_norm = types::F32;
+    let patches_embd = vm.workspace(dt_w, &[patches, d]);
+    let image_embd = vm.workspace(dt_w, &[patches / 4, d_proj]);
+    vm.forward(
+        patch_embd,
+        0,
+        &PatchEmbd { dt_w, bias: false },
+        patch_embd::Args {
+            patch_embd: patches_embd.clone(),
+            raw: image,
+            d_patch,
+        },
+    )
+    .forward(
+        qw2vl_vit,
+        0,
+        &Transformer::repeat(
+            TransformerBlk::qw2vl_vit(dt_norm, dt_w, nh, nh, dh, di),
+            nblk,
+        ),
+        transformer::Args {
+            embed: patches_embd.clone(),
+            n_sin: nctx,
+            n_cos: nctx,
+            // 无 kv_cache
+            reqs: vec![transformer::Request {
+                kv_cache: vm.workspace(dt_w, &[1]),
+                n_seq: 1,
+                pos: 0,
+            }],
+        },
+    )
+    .forward(
+        merger,
+        0,
+        &Merger {
+            post_norm: Normalization {
+                ty: Type::LayerNorm,
+                dt_w,
+            },
+            mlp: mlp::Mlp {
+                act: mlp::Activation::GeLU,
+                dt_w,
+                di,
+                up_bias: true,
+                down_bias: true,
+            },
+        },
+        merger::Args {
+            y: image_embd,
+            x: patches_embd,
+        },
+    );
 }
 
 enum Data {

@@ -113,4 +113,4 @@ impl vm::CommGroup for CommGroup {
 mod test_llama;
 
 #[cfg(test)]
-mod test_qw2vl;
+mod test_qw2vl_mmproj;

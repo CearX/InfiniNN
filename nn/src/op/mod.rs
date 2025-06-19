@@ -1,4 +1,5 @@
 mod add;
+mod conv;
 mod gelu;
 mod layer_norm;
 mod mat_mul;
