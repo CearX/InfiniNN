@@ -11,6 +11,7 @@ pub mod linear;
 pub mod merge;
 pub mod mrope;
 pub mod normalization;
+pub mod rearrange;
 pub mod rope;
 pub mod split;
 pub mod tile;

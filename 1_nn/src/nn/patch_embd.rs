@@ -81,8 +81,10 @@ impl<T> NuralNetwork<T> for PatchEmbd<T> {
 
         // reshape: [n, hp, wp, m] -> [n * hp/2, 2, wp/2, 2*m]
         destruct!([image_embd] = image_embd.tile("", 1, [hp.clone() / 2, Dim::from(2)]));
+        destruct!([image_embd] = ctx.call("", "rearrange", None, [image_embd]).unwrap());
         destruct!([image_embd] = image_embd.merge("", 0, 2));
         destruct!([image_embd] = image_embd.tile("", 2, [wp / 2, Dim::from(2)]));
+        destruct!([image_embd] = ctx.call("", "rearrange", None, [image_embd]).unwrap());
         destruct!([image_embd] = image_embd.merge("", 3, 2));
 
         // transpose: [n * hp/2, 2, wp/2, 2*m] -> [n * hp/2, wp/2, 2, 2*m]
@@ -90,8 +92,10 @@ impl<T> NuralNetwork<T> for PatchEmbd<T> {
 
         // reshape: [n * hp/2, wp/2, 2, 2*m] -> [n, hp * wp, m]
         destruct!([image_embd] = image_embd.tile("", 0, [n.clone(), hp / 2]));
+        destruct!([image_embd] = ctx.call("", "rearrange", None, [image_embd]).unwrap());
         destruct!([image_embd] = image_embd.merge("", 1, 3));
         destruct!([image_embd] = image_embd.tile("", 2, [Dim::from(2), m]));
+        destruct!([image_embd] = ctx.call("", "rearrange", None, [image_embd]).unwrap());
         destruct!([image_embd] = image_embd.merge("", 1, 2));
 
         // merge-last: [n, hp * wp, m] -> [n * patches, m]
