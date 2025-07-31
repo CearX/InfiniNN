@@ -4,7 +4,7 @@
     meta,
 };
 use ggus::GGufMetaMapExt;
-use nn::Tensor;
+use nn::{MRoPE, Tensor};
 use tensor::digit_layout::types;
 
 pub fn init(gguf: &mut GGufModel) -> nn::LLaMA<String> {
@@ -48,6 +48,7 @@ pub fn init(gguf: &mut GGufModel) -> nn::LLaMA<String> {
                 weight: "token_embd.weight".to_string(),
             },
             wpe: None,
+            img_info: None,
         },
         blks: (0..nblk)
             .map(|iblk| {
@@ -100,7 +101,7 @@ pub fn init(gguf: &mut GGufModel) -> nn::LLaMA<String> {
                             None
                         },
                         rope: Some(::nn::RoPE {
-                            multimodal: false,
+                            multimodal: MRoPE::None,
                             nctx,
                             sin: "sin_table".into(),
                             cos: "cos_table".into(),

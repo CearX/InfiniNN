@@ -19,6 +19,7 @@ use crate::{
 };
 
 pub use activation::Activation;
+pub use attention::MRoPE;
 pub use attention::{Attention, RoPE};
 pub use cogvlm::CogVLM;
 pub use distribution::{Distribution, TPAction, TPTensor, WeightType, weight_types};

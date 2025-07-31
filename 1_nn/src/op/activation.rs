@@ -22,6 +22,21 @@ impl Operator for SwiGLU {
     }
 }
 
+pub struct SiLU;
+
+impl Operator for SiLU {
+    fn infer(&self, inputs: &[TensorMeta], args: Option<&Arg>) -> Result<Vec<TensorMeta>, OpError> {
+        if args.is_some() {
+            return Err(OpError::ArgError);
+        }
+
+        destruct!([up] = inputs);
+        dims!([_n, _d] = up);
+
+        Ok(vec![up.clone()])
+    }
+}
+
 pub struct GeLU;
 
 impl Operator for GeLU {

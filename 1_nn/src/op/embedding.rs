@@ -6,9 +6,12 @@ pub struct Embedding;
 
 impl Operator for Embedding {
     fn infer(&self, inputs: &[TensorMeta], args: Option<&Arg>) -> Result<Vec<TensorMeta>, OpError> {
-        if args.is_some() {
-            return Err(OpError::ArgError);
+        match args {
+            Some(Arg::Arr(_)) => {}
+            None => {}
+            _ => return Err(OpError::ArgError),
         }
+
         match inputs {
             [wte, tokens] => {
                 dims!([_, d] = wte);

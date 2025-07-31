@@ -6,6 +6,7 @@ use crate::{
     TPAction,
     weight_types::{AttnQKV, RowTPWeight},
 };
+use arg::Arg;
 use tensor::digit_layout::types;
 
 #[derive(Clone)]
@@ -21,10 +22,17 @@ pub struct Attention<T> {
 
 #[derive(Clone)]
 pub struct RoPE<T> {
-    pub multimodal: bool,
+    pub multimodal: MRoPE,
     pub nctx: usize,
     pub sin: T,
     pub cos: T,
+}
+
+#[derive(Clone)]
+pub enum MRoPE {
+    None,
+    MRoPE2D,
+    MRoPE3D([usize; 3]),
 }
 
 impl<T> Attention<T> {
@@ -113,24 +121,27 @@ impl<T> NuralNetwork<T> for Attention<T> {
                 sin,
                 cos,
             }) => {
-                let shape = if multimodal {
-                    [nctx.into(), dh.clone() / 4]
-                } else {
-                    [nctx.into(), dh.clone() / 2]
+                let (op, shape, arg) = match multimodal {
+                    MRoPE::None => ("rope", [nctx.into(), dh.clone() / 2], None),
+                    MRoPE::MRoPE2D => ("mrope", [nctx.into(), dh.clone() / 4], None),
+                    MRoPE::MRoPE3D(section) => (
+                        "mrope",
+                        [nctx.into(), dh.clone() / 2],
+                        Some(Arg::arr(section.map(Arg::int))),
+                    ),
                 };
                 let sin = ctx.load_external("rope.sin", types::F32, shape.clone(), sin);
                 let cos = ctx.load_external("rope.cos", types::F32, shape, cos);
 
-                let op = if multimodal { "mrope" } else { "rope" };
                 destruct!(
                     [q_] = ctx.call(
                         "attn-q-rope",
                         op,
-                        None,
+                        arg.clone(),
                         [q, pos.clone(), sin.clone(), cos.clone()]
                     )?
                 );
-                destruct!([k_] = ctx.call("attn-k-rope", op, None, [k, pos, sin, cos])?);
+                destruct!([k_] = ctx.call("attn-k-rope", op, arg, [k, pos, sin, cos])?);
                 [q_, k_]
             }
             None => [q, k],
